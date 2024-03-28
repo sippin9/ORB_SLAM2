@@ -24,6 +24,7 @@
 
 #include<opencv2/core/core.hpp>
 #include<opencv2/features2d/features2d.hpp>
+#include<chrono>
 
 #include"Viewer.h"
 #include"FrameDrawer.h"
@@ -61,9 +62,9 @@ public:
     cv::Mat GrabImageStereo(const cv::Mat &imRectLeft,const cv::Mat &imRectRight, const double &timestamp);
     cv::Mat GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp);
     cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
-    cv::Mat PreSVD(const cv::Mat &imRectRight);
+    static cv::Mat PreSVD(const cv::Mat &imRectRight);
     static cv::Mat createDiagonalMatrix(const cv::Scalar &value, int size1, int size2);
-    cv::Mat PreGamma(const cv::Mat &imRectLeft, float gamma);
+    static cv::Mat PreGamma(const cv::Mat &imRectLeft, float gamma);
 
     void SetLocalMapper(LocalMapping* pLocalMapper);
     void SetLoopClosing(LoopClosing* pLoopClosing);

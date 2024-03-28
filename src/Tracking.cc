@@ -258,6 +258,7 @@ cv::Mat Tracking::createDiagonalMatrix(const cv::Scalar &value, int size1, int s
 
 cv::Mat Tracking::PreSVD(const cv::Mat &imRectRight)
 {
+/*
     // Convert the image to grayscale if needed
     cv::Mat grayImage;
     imRectRight.convertTo(grayImage, CV_32F);
@@ -292,10 +293,11 @@ cv::Mat Tracking::PreSVD(const cv::Mat &imRectRight)
     // Reconstruct the image using the updated SVD components
     cv::Mat reconstructedImage = svdU * adjustedS * svdVt;
     reconstructedImage.convertTo(reconstructedImage, CV_8U);
+*/
 
     // Apply Non-Local Means denoising
     cv::Mat denoisedImage;
-    cv::fastNlMeansDenoising(reconstructedImage, denoisedImage);
+    cv::fastNlMeansDenoising(/*reconstructedImage*/imRectRight, denoisedImage);
 
     // Apply median filtering
     cv::Mat enhancedImage;
@@ -340,6 +342,8 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
 
 void Tracking::Track()
 {
+    auto start = std::chrono::high_resolution_clock::now();
+
     if(mState==NO_IMAGES_YET)
     {
         mState = NOT_INITIALIZED;
@@ -577,6 +581,12 @@ void Tracking::Track()
         mlbLost.push_back(mState==LOST);
     }
 
+    // 结束计时
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+
+    // 打印耗时
+    std::cout << "本帧耗时: " << elapsed.count() << " 秒" << std::endl;
 }
 
 
