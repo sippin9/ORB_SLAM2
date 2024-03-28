@@ -234,6 +234,78 @@ cv::Mat Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const d
     return mCurrentFrame.mTcw.clone();
 }
 
+cv::Mat Tracking::PreGamma(const cv::Mat &imRectLeft, float gamma)
+{
+    // Apply gamma correction
+    cv::Mat enhanced = imRectLeft.clone();
+    for (int i = 0; i<enhanced.rows; ++i)
+        for (int j = 0; j<enhanced.cols; ++j)
+        {
+            float normalizedValue = enhanced.at<uchar>(i,j) / 255.0;
+            float correctedValue = std::pow(normalizedValue, gamma) * 255.0;
+            enhanced.at<uchar>(i,j) = static_cast<uchar>(correctedValue);
+        }
+    return enhanced;
+}
+
+cv::Mat Tracking::createDiagonalMatrix(const cv::Scalar &value, int size1, int size2)
+{
+    cv::Mat diagonalMatrix = cv::Mat::zeros(size1, size1, CV_32F);
+    for (int i=0; i<size1; ++i)
+        diagonalMatrix.at<float>(i,i) += value[0];
+    return diagonalMatrix;
+}
+
+cv::Mat Tracking::PreSVD(const cv::Mat &imRectRight)
+{
+    // Convert the image to grayscale if needed
+    cv::Mat grayImage;
+    imRectRight.convertTo(grayImage, CV_32F);
+
+    // Perform SVD on the grayscale image
+    cv::Mat svdU, svdS, svdVt;
+    cv::SVD::compute(grayImage, svdS, svdU, svdVt);
+
+    //Width of U: 512
+    //Height of U: 512
+    //Width of S: 1
+    //Height of S: 512
+    //Width of Vt: 640
+    //Height of Vt: 512
+
+    // Delete the largest eigenvalue by setting it to zero
+    cv::Mat singularValues = svdS.diag();
+    cv::Scalar maxSingularValue;
+    cv::Point maxSingularValueIdx;
+    cv::minMaxLoc(singularValues, nullptr, &maxSingularValue[0], nullptr, &maxSingularValueIdx);
+    singularValues.at<float>(maxSingularValueIdx) = 0.0f;
+    cv::Mat updatedS = cv::Mat::diag(singularValues);
+
+    // Adjust the eigenvalues by adding each eigenvalue with the average of the eigenvalues
+    cv::Scalar meanSingularValue = cv::mean(updatedS);
+    cv::Mat adjustedS = createDiagonalMatrix(meanSingularValue, svdS.rows, svdS.cols);
+
+    svdU.convertTo(svdU, CV_32F);
+    adjustedS.convertTo(adjustedS, CV_32F);
+    svdVt.convertTo(svdVt, CV_32F);
+
+    // Reconstruct the image using the updated SVD components
+    cv::Mat reconstructedImage = svdU * adjustedS * svdVt;
+    reconstructedImage.convertTo(reconstructedImage, CV_8U);
+
+    // Apply Non-Local Means denoising
+    cv::Mat denoisedImage;
+    cv::fastNlMeansDenoising(reconstructedImage, denoisedImage);
+
+    // Apply median filtering
+    cv::Mat enhancedImage;
+    cv::medianBlur(denoisedImage, enhancedImage, 3);
+
+    cv::Mat returnImage;
+    enhancedImage.convertTo(returnImage, CV_8U);
+
+    return returnImage;
+}
 
 cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
 {
@@ -254,10 +326,12 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
             cvtColor(mImGray,mImGray,CV_BGRA2GRAY);
     }
 
+    cv::Mat mImGraySVD = PreSVD(mImGray);
+
     if(mState==NOT_INITIALIZED || mState==NO_IMAGES_YET)
-        mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
+        mCurrentFrame = Frame(mImGraySVD,timestamp,mpIniORBextractor,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
     else
-        mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
+        mCurrentFrame = Frame(mImGraySVD,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
 
     Track();
 
