@@ -66,6 +66,9 @@ public:
     static cv::Mat createDiagonalMatrix(const cv::Scalar &value, int size1, int size2);
     static cv::Mat PreGamma(const cv::Mat &imRectLeft, float gamma);
 
+    static cv::Mat guidedFilter(const cv::Mat &srcMat, int radius, double eps);
+    static cv::Mat AdaptiveFilter(const cv::Mat &v);
+
     void SetLocalMapper(LocalMapping* pLocalMapper);
     void SetLoopClosing(LoopClosing* pLoopClosing);
     void SetViewer(Viewer* pViewer);
