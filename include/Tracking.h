@@ -67,7 +67,7 @@ public:
     static cv::Mat PreGamma(const cv::Mat &imRectLeft, float gamma);
 
     static cv::Mat guidedFilter(const cv::Mat &srcMat, int radius, double eps);
-    static cv::Mat AdaptiveFilter(const cv::Mat &v);
+    static cv::Mat AdaptiveFilter(const cv::Mat &vv);
 
     void SetLocalMapper(LocalMapping* pLocalMapper);
     void SetLoopClosing(LoopClosing* pLoopClosing);
