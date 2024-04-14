@@ -239,14 +239,15 @@ cv::Mat Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const d
 cv::Mat Tracking::PreGamma(const cv::Mat &imRectLeft, float gamma)
 {
     // Apply gamma correction
-    cv::Mat enhanced = imRectLeft.clone();
+    cv::Mat enhanced = imRectLeft;
     for (int i = 0; i<enhanced.rows; ++i)
         for (int j = 0; j<enhanced.cols; ++j)
         {
-            float normalizedValue = enhanced.at<uchar>(i,j) / 255.0;
-            float correctedValue = std::pow(normalizedValue, gamma) * 255.0;
+            double normalizedValue = enhanced.at<uchar>(i,j) / 255.0;
+            double correctedValue = std::pow(normalizedValue, gamma) * 255.0;
             enhanced.at<uchar>(i,j) = static_cast<uchar>(correctedValue);
         }
+    enhanced.convertTo(enhanced, CV_8U);
     return enhanced;
 }
 
@@ -346,17 +347,17 @@ cv::Mat Tracking::AdaptiveFilter(const cv::Mat& vv)
     //n = t (Texture) + s (Fixed Pattern Noise)
     cv::Mat v = cv::Mat::zeros(vv.size(), vv.type());
     vv.convertTo(v, CV_64FC1);
-    v = v / 255;
-    cv::Mat u = cv::Mat::zeros(v.size(), CV_64FC1);
-    cv::Mat n = cv::Mat::zeros(v.size(), CV_64FC1);
+    v = v/255;
+    cv::Mat u = cv::Mat::zeros(v.size(), v.type());
+    cv::Mat n = cv::Mat::zeros(v.size(), v.type());
     cv::Mat s = cv::Mat::zeros(v.size(), v.type());
 
     /**********************************
      * Guided Filter
     ***********************************/
 
-    u = guidedFilter(v, 3, 0.1);
-    //cout<<cv::depthToString(v.depth())<<endl;
+    u = guidedFilter(v, 3, 0.01);
+    //cout<<cv::depthToString(u.depth())<<endl;
     n = v - u;
 
     /**********************************
@@ -376,7 +377,7 @@ cv::Mat Tracking::AdaptiveFilter(const cv::Mat& vv)
     cv::Sobel(u, grad_ux, CV_64FC1, 1, 0, 3);
     cv::Scalar mean_ux, std_ux;
     cv::meanStdDev(grad_ux, mean_ux, std_ux);
-    double sigma_r1 = 10 * std_ux[0];
+    double sigma_r1 = 15 * std_ux[0];
 
     //Step 2. Construct HDS1d(i)
     cv::Mat HDS = cv::Mat::zeros(v.size(), v.type());
@@ -414,22 +415,60 @@ cv::Mat Tracking::AdaptiveFilter(const cv::Mat& vv)
             for (int j = y_min; j <= y_max; ++j)
                 nj += n.at<double>(j, x);
             s.at<double>(y, x) = nj / Ki;
+            // nj becomes negative
         }
     s.convertTo(s, CV_64FC1);
 
-    cv::Mat imageresult = cv::Mat::zeros(v.size(), v.type());
-    imageresult = v - s;
-    imageresult = imageresult * 255;
-    //cout << "Adaptive done" << endl;
+    cv::Mat imageresult = cv::Mat::zeros(v.size(), CV_8U);
+    for(int y = 0; y < imageresult.rows; ++y)
+        for(int x = 0; x < imageresult.cols; ++x)
+        {
+            double val = 255 * (v.at<double>(y,x) - s.at<double>(y,x));
+            imageresult.at<uchar>(y,x) = (int)val;
+        }
 
+    //cv::Mat denoisedImage;
+    //cv::fastNlMeansDenoising(/*reconstructedImage*/imageresult, denoisedImage);
+
+    // Apply median filtering
+    /*
+    cv::Mat enhancedImage;
+    cv::medianBlur(denoisedImage, enhancedImage, 3);
+    enhancedImage.convertTo(enhancedImage, CV_8U);
+    */
+    //imageresult = imageresult * 255;
+    //cout << "Adaptive done" << endl;
     return imageresult;
 }
 
 cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
 {
+    auto start = std::chrono::high_resolution_clock::now();
     mImGray = im;
 
-    if(mImGray.channels()==3)
+    if(mImGray.channels()==1)
+    {
+        //cout <<"Depth: "<< im.depth() <<" Channels: "<< im.channels() <<endl;
+        double valMin, valMax;
+        cv::minMaxLoc(mImGray, &valMin, &valMax);
+
+        cv::Mat mImGrayRead = cv::Mat::zeros(mImGray.size(), CV_8U);
+        for(int y = 0; y < mImGray.rows; ++y)
+            for(int x = 0; x < mImGray.cols; ++x)
+            {
+                double nn = (mImGray.at<ushort>(y,x) - valMin) * 255 / (valMax - valMin);
+                mImGrayRead.at<uchar>(y,x) = (int)nn;
+            }
+
+        cv::Mat mImGrayGamma = PreGamma(mImGrayRead, 0.65);
+        cv::Mat mImGrayHist = cv::Mat::zeros(mImGray.size(), CV_8U);
+        cv::equalizeHist(mImGrayRead, mImGrayHist);
+        cv::Mat mImGrayAdapt = 0.7 * mImGrayHist + 0.3 * mImGrayGamma;
+        //mImGray = mImGrayAdapt;
+        //mImGray = AdaptiveFilter(mImGrayAdapt);
+        //Not useful: cv::fastNlMeansDenoising(mImGrayAdapt, mImGray);
+    }
+    else if(mImGray.channels()==3)
     {
         if(mbRGB)
             cvtColor(mImGray,mImGray,CV_RGB2GRAY);
@@ -443,8 +482,12 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
         else
             cvtColor(mImGray,mImGray,CV_BGRA2GRAY);
     }
+    // 结束计时
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
 
-    //cv::Mat mImGraySVD = AdaptiveFilter(mImGray);
+    // 打印耗时
+    std::cout << "本帧耗时: " << elapsed.count() << " 秒" << std::endl;
 
     if(mState==NOT_INITIALIZED || mState==NO_IMAGES_YET)
         mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
@@ -458,7 +501,6 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
 
 void Tracking::Track()
 {
-    auto start = std::chrono::high_resolution_clock::now();
 
     if(mState==NO_IMAGES_YET)
     {
@@ -696,13 +738,6 @@ void Tracking::Track()
         mlFrameTimes.push_back(mlFrameTimes.back());
         mlbLost.push_back(mState==LOST);
     }
-
-    // 结束计时
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = end - start;
-
-    // 打印耗时
-    std::cout << "本帧耗时: " << elapsed.count() << " 秒" << std::endl;
 }
 
 
