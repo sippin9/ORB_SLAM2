@@ -62,10 +62,11 @@ public:
     cv::Mat GrabImageStereo(const cv::Mat &imRectLeft,const cv::Mat &imRectRight, const double &timestamp);
     cv::Mat GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp);
     cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
+
+    static cv::Mat PreProcess(const cv::Mat &im);
     static cv::Mat PreSVD(const cv::Mat &imRectRight);
     static cv::Mat createDiagonalMatrix(const cv::Scalar &value, int size1, int size2);
     static cv::Mat PreGamma(const cv::Mat &imRectLeft, float gamma);
-
     static cv::Mat guidedFilter(const cv::Mat &srcMat, int radius, double eps);
     static cv::Mat AdaptiveFilter(const cv::Mat &vv);
 
