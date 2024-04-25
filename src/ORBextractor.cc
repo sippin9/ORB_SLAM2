@@ -1127,6 +1127,7 @@ void ORBextractor::ComputePyramid(cv::Mat image)
             copyMakeBorder(image, temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
                            BORDER_REFLECT_101);            
         }
+        mvImagePyramid[level] = temp;
     }
 
 }

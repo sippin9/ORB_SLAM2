@@ -166,9 +166,24 @@ void Tracking::SetViewer(Viewer *pViewer)
 
 cv::Mat Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRectRight, const double &timestamp)
 {
-    mImGray = imRectLeft;
-    cv::Mat imGrayRight = imRectRight;
+    mImGray = cv::Mat::zeros(imRectLeft.size(), CV_8U);
+    cv::Mat imGrayRight = cv::Mat::zeros(imRectRight.size(), CV_8U);
 
+    //Read LWIR images for RectLeft, RGB images for Rectright
+    if(mbRGB)
+    {
+        mImGray = PreProcess(imRectLeft);
+        imGrayRight = PreProcess(imRectRight);
+        //cvtColor(imGrayRight,imGrayRight,CV_RGB2GRAY);
+    }
+    else
+    {
+        mImGray = PreProcess(imRectLeft);
+        imGrayRight = PreProcess(imRectRight);
+        //cvtColor(imGrayRight,imGrayRight,CV_BGR2GRAY);
+    }
+
+/*
     if(mImGray.channels()==3)
     {
         if(mbRGB)
@@ -195,7 +210,7 @@ cv::Mat Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRe
             cvtColor(imGrayRight,imGrayRight,CV_BGRA2GRAY);
         }
     }
-
+*/
     mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
 
     Track();
@@ -461,10 +476,10 @@ cv::Mat Tracking::PreProcess(const cv::Mat &im)
 
     cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
     clahe->setClipLimit(8); // (int)(4.(88)/256)
-    clahe->setTilesGridSize(cv::Size(16, 16)); // 将图像分为8*8块
+    clahe->setTilesGridSize(cv::Size(8, 8)); // 将图像分为8*8块
     clahe->apply(mImGrayRead, mImGrayHist);
 
-    cv::Mat mImGrayAdapt = 0.8 * mImGrayHist + 0.2 * mImGrayGamma;
+    cv::Mat mImGrayAdapt = 0.9 * mImGrayHist + 0.1 * mImGrayGamma;
 
     //Adaptive FPN filter useful for dark images
     mImGrayP = AdaptiveFilter(mImGrayAdapt);
