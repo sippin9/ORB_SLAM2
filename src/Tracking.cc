@@ -170,17 +170,16 @@ cv::Mat Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRe
     cv::Mat imGrayRight = cv::Mat::zeros(imRectRight.size(), CV_8U);
 
     //Read LWIR images for RectLeft, RGB images for Rectright
-    if(mbRGB)
+    if(imRectRight.channels()>1)
     {
         mImGray = PreProcess(imRectLeft);
-        imGrayRight = PreProcess(imRectRight);
-        //cvtColor(imGrayRight,imGrayRight,CV_RGB2GRAY);
+        cvtColor(imRectRight,imGrayRight,CV_RGB2GRAY);
+        imGrayRight = PreProcess1(imGrayRight);
     }
     else
     {
         mImGray = PreProcess(imRectLeft);
-        imGrayRight = PreProcess(imRectRight);
-        //cvtColor(imGrayRight,imGrayRight,CV_BGR2GRAY);
+        imGrayRight = PreProcess1(imGrayRight);
     }
 
 /*
@@ -250,66 +249,6 @@ cv::Mat Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const d
 }
 
 //Pre-processing functions for low light images
-cv::Mat Tracking::createDiagonalMatrix(const cv::Scalar &value, int size1, int size2)
-{
-    cv::Mat diagonalMatrix = cv::Mat::zeros(size1, size1, CV_32F);
-    for (int i=0; i<size1; ++i)
-        diagonalMatrix.at<float>(i,i) += value[0];
-    return diagonalMatrix;
-}
-
-cv::Mat Tracking::PreSVD(const cv::Mat &imRectRight)
-{
-/*
-    // Convert the image to grayscale if needed
-    cv::Mat grayImage;
-    imRectRight.convertTo(grayImage, CV_32F);
-
-    // Perform SVD on the grayscale image
-    cv::Mat svdU, svdS, svdVt;
-    cv::SVD::compute(grayImage, svdS, svdU, svdVt);
-
-    //Width of U: 512
-    //Height of U: 512
-    //Width of S: 1
-    //Height of S: 512
-    //Width of Vt: 640
-    //Height of Vt: 512
-
-    // Delete the largest eigenvalue by setting it to zero
-    cv::Mat singularValues = svdS.diag();
-    cv::Scalar maxSingularValue;
-    cv::Point maxSingularValueIdx;
-    cv::minMaxLoc(singularValues, nullptr, &maxSingularValue[0], nullptr, &maxSingularValueIdx);
-    singularValues.at<float>(maxSingularValueIdx) = 0.0f;
-    cv::Mat updatedS = cv::Mat::diag(singularValues);
-
-    // Adjust the eigenvalues by adding each eigenvalue with the average of the eigenvalues
-    cv::Scalar meanSingularValue = cv::mean(updatedS);
-    cv::Mat adjustedS = createDiagonalMatrix(meanSingularValue, svdS.rows, svdS.cols);
-
-    svdU.convertTo(svdU, CV_32F);
-    adjustedS.convertTo(adjustedS, CV_32F);
-    svdVt.convertTo(svdVt, CV_32F);
-
-    // Reconstruct the image using the updated SVD components
-    cv::Mat reconstructedImage = svdU * adjustedS * svdVt;
-    reconstructedImage.convertTo(reconstructedImage, CV_8U);
-*/
-
-    // Apply Non-Local Means denoising
-    cv::Mat denoisedImage;
-    cv::fastNlMeansDenoising(/*reconstructedImage*/imRectRight, denoisedImage);
-
-    // Apply median filtering
-    cv::Mat enhancedImage;
-    cv::medianBlur(denoisedImage, enhancedImage, 3);
-
-    cv::Mat returnImage;
-    enhancedImage.convertTo(returnImage, CV_8U);
-
-    return returnImage;
-}
 
 cv::Mat Tracking::PreGamma(const cv::Mat &imRectLeft, float gamma)
 {
@@ -455,18 +394,32 @@ cv::Mat Tracking::AdaptiveFilter(const cv::Mat& vv)
     return imageresult;
 }
 
-cv::Mat Tracking::PreProcess(const cv::Mat &im)
+cv::Mat Tracking::PreProcess(const cv::Mat& im)
 {
+    // Get the dimensions of the input image
+    int width = im.cols;
+    int height = im.rows;
+
+    // Define the region of interest (ROI) coordinates
+    int roiX = (width - 640) / 2;
+    int roiY = (height - 304) / 2;
+    int roiWidth = 640;
+    int roiHeight = 304;
+
+    // Create a ROI (Region of Interest) from the input image
+    cv::Rect roiRect(roiX, roiY, roiWidth, roiHeight);
+    cv::Mat inputImage = im(roiRect).clone();
+
     double valMin, valMax;
-    cv::Mat mImGrayP = im;
+    cv::Mat mImGrayP = inputImage;
     cv::minMaxLoc(mImGrayP, &valMin, &valMax);
 
     cv::Mat mImGrayRead = cv::Mat::zeros(mImGrayP.size(), CV_8U);
-    for(int y = 0; y < mImGrayP.rows; ++y)
-        for(int x = 0; x < mImGrayP.cols; ++x)
+    for (int y = 0; y < mImGrayP.rows; ++y)
+        for (int x = 0; x < mImGrayP.cols; ++x)
         {
-            double nn = (mImGrayP.at<ushort>(y,x) - valMin) * 255 / (valMax - valMin);
-            mImGrayRead.at<uchar>(y,x) = (int)nn;
+            double nn = (mImGrayP.at<ushort>(y, x) - valMin) * 255 / (valMax - valMin);
+            mImGrayRead.at<uchar>(y, x) = (int)nn;
         }
 
     cv::Mat mImGrayGamma = PreGamma(mImGrayRead, 0.65);
@@ -489,6 +442,41 @@ cv::Mat Tracking::PreProcess(const cv::Mat &im)
     //cv::fastNlMeansDenoising(mImGrayP, mImGrayP);
 
     return mImGrayP;
+}
+
+cv::Mat Tracking::PreProcess1(const cv::Mat& inputImage) {
+    static double fx1, fy1, fx2, fy2;
+    fx1 = 429.433;
+    fx2 = 788.413;
+    fy1 = 429.531;
+    fy2 = 790.926;
+
+    cv::Mat scaledImage;
+    cv::resize(inputImage, scaledImage, cv::Size(), fx1 / fx2, fy1 / fy2);
+
+    // Get the dimensions of the input image
+    int width = scaledImage.cols;
+    int height = scaledImage.rows;
+
+    // Define the region of interest (ROI) coordinates
+    int roiX = (width - 640) / 2;
+    int roiY = (height - 304) / 2;
+    int roiWidth = 640;
+    int roiHeight = 304;
+
+    // Create a ROI (Region of Interest) from the input image
+    cv::Rect roiRect(roiX, roiY, roiWidth, roiHeight);
+    cv::Mat croppedImage = scaledImage(roiRect).clone();
+
+    croppedImage.convertTo(croppedImage, CV_8U);
+
+    //cv::Mat denoisedImage;
+    //cv::medianBlur(croppedImage, denoisedImage, 5);
+    //cv::bilateralFilter(croppedImage, denoisedImage, 9, 75, 75);
+    //cv::fastNlMeansDenoising(croppedImage, denoisedImage, 10, 7, 21);
+
+    // Return the cropped image
+    return croppedImage;
 }
 
 cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
