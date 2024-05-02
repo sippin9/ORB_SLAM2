@@ -12,7 +12,8 @@ PathSaveMap: "/home/michael/Documents/map"
 Camera.fx: 429.43289
 Camera.fy: 429.53143
 Camera.cx: 311.11924
-Camera.cy: 266.12818
+Camera.cy: 162.12818
+# cy - (512-304)/2
 
 Camera.k1: 0.0
 Camera.k2: 0.0

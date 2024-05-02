@@ -479,6 +479,57 @@ cv::Mat Tracking::PreProcess1(const cv::Mat& inputImage) {
     return croppedImage;
 }
 
+cv::Mat Tracking::PreProcessMono(const cv::Mat& im)
+{
+    // Get the dimensions of the input image
+    int width = im.cols;
+    int height = im.rows;
+
+    /*
+    // Define the region of interest (ROI) coordinates
+    int roiX = (width - 640) / 2;
+    int roiY = (height - 304) / 2;
+    int roiWidth = 640;
+    int roiHeight = 304;
+    // Create a ROI (Region of Interest) from the input image
+    cv::Rect roiRect(roiX, roiY, roiWidth, roiHeight);
+    */
+    cv::Mat inputImage = im/*(roiRect)*/.clone();
+
+    double valMin, valMax;
+    cv::Mat mImGrayP = inputImage;
+    cv::minMaxLoc(mImGrayP, &valMin, &valMax);
+
+    cv::Mat mImGrayRead = cv::Mat::zeros(mImGrayP.size(), CV_8U);
+    for (int y = 0; y < mImGrayP.rows; ++y)
+        for (int x = 0; x < mImGrayP.cols; ++x)
+        {
+            double nn = (mImGrayP.at<ushort>(y, x) - valMin) * 255 / (valMax - valMin);
+            mImGrayRead.at<uchar>(y, x) = (int)nn;
+        }
+
+    cv::Mat mImGrayGamma = PreGamma(mImGrayRead, 0.65);
+
+    cv::Mat mImGrayHist = cv::Mat::zeros(mImGrayP.size(), CV_8U);
+    //cv::equalizeHist(mImGrayRead, mImGrayHist);
+
+    cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
+    clahe->setClipLimit(8); // (int)(4.(88)/256)
+    clahe->setTilesGridSize(cv::Size(8, 8)); // 将图像分为8*8块
+    clahe->apply(mImGrayRead, mImGrayHist);
+
+    cv::Mat mImGrayAdapt = 0.9 * mImGrayHist + 0.1 * mImGrayGamma;
+
+    //Adaptive FPN filter useful for dark images
+    mImGrayP = AdaptiveFilter(mImGrayAdapt);
+    //mImGrayP = mImGrayAdapt;
+
+    //Too slow as denoising
+    //cv::fastNlMeansDenoising(mImGrayP, mImGrayP);
+
+    return mImGrayP;
+}
+
 cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
 {
     auto start = std::chrono::high_resolution_clock::now();
@@ -486,7 +537,7 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
     if(mImGray.channels()==1)
     {
         //cout <<"Depth: "<< im.depth() <<" Channels: "<< im.channels() <<endl;
-        mImGray = PreProcess(im);
+        mImGray = PreProcessMono(im);
     }
     else if(mImGray.channels()==3)
     {
@@ -495,6 +546,7 @@ cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
             cvtColor(mImGray,mImGray,CV_RGB2GRAY);
         else
             cvtColor(mImGray,mImGray,CV_BGR2GRAY);
+        mImGray = PreProcessMono(mImGray);
     }
     else if(mImGray.channels()==4)
     {

@@ -86,6 +86,8 @@ public:
 
 protected:
 
+    void FAST_L(const cv::Mat& _img, std::vector<cv::KeyPoint>& keypoints, bool nonmax_suppression);
+    void mmakeOffsets(int pixel[25], int rowStride, int patternSize);
     void ComputePyramid(cv::Mat image);
     void ComputeKeyPointsOctTree(std::vector<std::vector<cv::KeyPoint> >& allKeypoints);    
     std::vector<cv::KeyPoint> DistributeOctTree(const std::vector<cv::KeyPoint>& vToDistributeKeys, const int &minX,

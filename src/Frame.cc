@@ -74,7 +74,6 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
     mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
 
-    cout<<"R1\n";
     // ORB extraction
     thread threadLeft(&Frame::ExtractORB,this,0,imLeft);
     thread threadRight(&Frame::ExtractORB,this,1,imRight);
@@ -86,16 +85,13 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     if(mvKeys.empty())
         return;
 
-    cout<<"R2\n";
     UndistortKeyPoints();
 
-    cout<<"R3\n";
     ComputeStereoMatches();
 
     mvpMapPoints = vector<MapPoint*>(N,static_cast<MapPoint*>(NULL));    
     mvbOutlier = vector<bool>(N,false);
 
-    cout<<"R4\n";
     // This is done only for the first Frame (or after a change in the calibration)
     if(mbInitialComputations)
     {
@@ -115,10 +111,8 @@ Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeSt
     }
 
     mb = mbf/fx;
-    cout<<"R5\n";
     AssignFeaturesToGrid();
 
-    cout<<"R6\n";
 }
 
 Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
@@ -477,7 +471,6 @@ void Frame::ComputeStereoMatches()
 
     const int nRows = mpORBextractorLeft->mvImagePyramid[0].rows;
 
-    cout<<"C1\n";
     //Assign keypoints to row table
     vector<vector<size_t> > vRowIndices(nRows,vector<size_t>());
 
@@ -498,13 +491,11 @@ void Frame::ComputeStereoMatches()
             vRowIndices[yi].push_back(iR);
     }
 
-    cout<<"C2\n";
     // Set limits for search
     const float minZ = mb;
     const float minD = 0;
     const float maxD = mbf/minZ;
 
-    cout<<"C3\n";
     // For each left keypoint search a match in the right image
     vector<pair<int, int> > vDistIdx;
     vDistIdx.reserve(N);
@@ -530,33 +521,25 @@ void Frame::ComputeStereoMatches()
         int bestDist = ORBmatcher::TH_HIGH;
         size_t bestIdxR = 0;
 
-        cout<<"C30\n";
         const cv::Mat &dL = mDescriptors.row(iL);
 
-        cout<<"C31\n";
         // Compare descriptor to right keypoints
         for(size_t iC=0; iC<vCandidates.size(); iC++)
         {
-            cout<<"C31.5\n";
             const size_t iR = vCandidates[iC];
             const cv::KeyPoint &kpR = mvKeysRight[iR];
-            cout<<"C31.6\n";
 
             if(kpR.octave<levelL-1 || kpR.octave>levelL+1)
             {
-                cout<<"Continue!\n";
                 continue;
             }
-            cout<<"C31.7\n";
             const float &uR = kpR.pt.x;
 
-            cout<<"C32\n";
             if(uR>=minU && uR<=maxU)
             {
                 const cv::Mat &dR = mDescriptorsRight.row(iR);
                 const int dist = ORBmatcher::DescriptorDistance(dL,dR);
 
-                cout<<"C33\n";
                 if(dist<bestDist)
                 {
                     bestDist = dist;
@@ -565,7 +548,6 @@ void Frame::ComputeStereoMatches()
             }
         }
 
-        cout<<"C4\n";
         // Subpixel match by correlation
         if(bestDist<thOrbDist)
         {
@@ -641,7 +623,6 @@ void Frame::ComputeStereoMatches()
         }
     }
 
-    cout<<"C5\n";
     sort(vDistIdx.begin(),vDistIdx.end());
     const float median = vDistIdx[vDistIdx.size()/2].first;
     const float thDist = 1.5f*1.4f*median;

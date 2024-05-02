@@ -64,6 +64,7 @@ public:
     cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
 
     static cv::Mat PreProcess(const cv::Mat &im);
+    static cv::Mat PreProcessMono(const cv::Mat &im);
     static cv::Mat PreProcess1(const cv::Mat &im);
     static cv::Mat PreGamma(const cv::Mat &imRectLeft, float gamma);
     static cv::Mat guidedFilter(const cv::Mat &srcMat, int radius, double eps);
